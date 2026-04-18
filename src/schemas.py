@@ -34,6 +34,7 @@ class DealershipInfo(TypedDict):
     sales_hours: Union[Dict[str, Any], str, None]
     service_hours: Union[Dict[str, Any], str, None]
     inventory_type: Optional[str]
+    available_transfer_departments: Optional[Any]  # extracted from XML; needed by escalation + tool_accuracy judges
 
 class SystemContext(TypedDict):
     dealership: Optional[DealershipInfo]

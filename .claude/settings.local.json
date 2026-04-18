@@ -3,7 +3,10 @@
     "allow": [
       "Bash(python etl.py --verbose)",
       "Bash(python3 etl.py --verbose)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(tree -a /Users/kaustubhchauhan/Downloads/inbound_sales_calls --ignore='.git' --ignore='.pytest_cache' -L 3)",
+      "Bash(python3)",
+      "Bash(python3 -c \"import json; d = json.load\\(open\\('/Users/kaustubhchauhan/Downloads/inbound_sales_calls/data/raw_calls/019d6a86-8665-788e-a91b-8b9cf7247192.json'\\)\\); print\\('keys:', list\\(d.keys\\(\\)\\)\\)\")"
     ]
   }
 }

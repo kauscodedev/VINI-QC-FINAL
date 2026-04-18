@@ -1,26 +1,40 @@
 import json
+import re
 from typing import Any, Union, Dict, Optional
 from xml.etree import ElementTree as ET
 
 from .schemas import ContextJSON, CallMetadata, SystemContext, TranscriptTurn, ToolEvent, DealershipInfo, CustomerInfo, VehicleTarget
 from .data_source import DataSource
 
-def _parse_xml_element(elem: ET.Element) -> Union[Dict[str, Any], str]:
+def _xml_elem_to_dict(elem: ET.Element) -> Union[Dict[str, Any], str]:
     if len(elem) == 0:
         return elem.text.strip() if elem.text else ""
     result = {}
     for child in elem:
-        result[child.tag] = _parse_xml_element(child)
+        result[child.tag] = _xml_elem_to_dict(child)
     return result
 
-def _parse_system_prompt_xml(raw_xml: Optional[str]) -> Dict[str, Any]:
-    if not raw_xml: return {}
-    wrapped_xml = f"<root>\n{raw_xml}\n</root>"
+def _extract_context_data(raw_xml: Optional[str]) -> Dict[str, Any]:
+    """Extract and parse only the <ContextData> block from the system prompt.
+    The surrounding XML contains unescaped prose characters that break full-doc parsing.
+    """
+    if not raw_xml:
+        return {}
+    m = re.search(r"<ContextData>.*?</ContextData>", raw_xml, re.DOTALL)
+    if not m:
+        return {}
     try:
-        root = ET.fromstring(wrapped_xml)
-        return _parse_xml_element(root)
+        root = ET.fromstring(m.group())
+        return _xml_elem_to_dict(root)
     except ET.ParseError:
         return {}
+
+def _v(d: Any, key: str, fallback: Any = None) -> Any:
+    """Get key from dict, returning fallback if missing or empty string."""
+    if not isinstance(d, dict):
+        return fallback
+    val = d.get(key)
+    return val if val else fallback
 
 def build_context(call_id: str, source: DataSource) -> ContextJSON:
     raw_data = source.get_call(call_id)
@@ -29,48 +43,74 @@ def build_context(call_id: str, source: DataSource) -> ContextJSON:
     messages = raw_data.get("messages", [])
     tool_calls = raw_data.get("tool_calls", [])
     tool_results = raw_data.get("tool_results", [])
-    
-    raw_prompt = context_info.get("raw_system_prompt")
-    xml_data = _parse_system_prompt_xml(raw_prompt)
-    
-    d_info = xml_data.get("dealership")
-    if isinstance(d_info, dict):
-        dealer = DealershipInfo(
-            name=d_info.get("name"), address=d_info.get("address"),
-            sales_hours=d_info.get("sales_hours"), service_hours=d_info.get("service_hours"),
-            inventory_type=d_info.get("inventory_type")
+
+    # Support both SQLite column name (system_prompt_raw) and Supabase column name (raw_system_prompt)
+    raw_prompt = context_info.get("raw_system_prompt") or context_info.get("system_prompt_raw")
+    ctx_xml = _extract_context_data(raw_prompt)  # direct ContextData dict, no SystemPrompt wrapper
+    d_xml = _v(ctx_xml, "Dealership", {})
+    c_xml = _v(ctx_xml, "Customer", {})
+    ah_xml = _v(d_xml, "AvailabilityHours", {})
+    iv_xml = _v(c_xml, "InterestedVehicle", {})
+    ti_xml = _v(c_xml, "TradeIn", {})
+    dt_xml = _v(ctx_xml, "CurrentDateTime", {})
+
+    dealer = DealershipInfo(
+        name=_v(d_xml, "Name") or context_info.get("dealership_name") or None,
+        address=_v(d_xml, "Address") or context_info.get("dealership_address") or None,
+        sales_hours=_v(ah_xml, "Sales") or context_info.get("dealership_sales_hours") or None,
+        service_hours=_v(ah_xml, "Service") or context_info.get("dealership_service_hours") or None,
+        inventory_type=_v(d_xml, "InventoryType") or context_info.get("dealership_inventory_type") or None,
+        available_transfer_departments=_v(d_xml, "AvailableTransferDepartments") or None,
+    )
+
+    phone = (
+        _v(c_xml, "CurrentPhoneNumber")
+        or _v(c_xml, "CustomerPhoneNumber")
+        or context_info.get("customer_current_phone")
+        or context_info.get("customer_phone")
+    )
+
+    interested_vehicle: Optional[VehicleTarget] = None
+    if iv_xml:
+        interested_vehicle = VehicleTarget(
+            make=_v(iv_xml, "Make"),
+            model=_v(iv_xml, "Model"),
+            year=_v(iv_xml, "Year"),
+            vin=_v(iv_xml, "VIN"),
+            stock=_v(iv_xml, "Stock"),
+            trim=_v(iv_xml, "Trim"),
+            is_sold=_v(iv_xml, "IsSold"),
         )
-    else:
-        dealer = DealershipInfo(
-            name=context_info.get("dealership_name"), address=context_info.get("dealership_address"),
-            sales_hours=context_info.get("dealership_sales_hours"), service_hours=context_info.get("dealership_service_hours"),
-            inventory_type=context_info.get("dealership_inventory_type")
-        )
-        if isinstance(dealer["sales_hours"], str):
-             try: dealer["sales_hours"] = json.loads(dealer["sales_hours"])
-             except: pass
-        if isinstance(dealer["service_hours"], str):
-             try: dealer["service_hours"] = json.loads(dealer["service_hours"])
-             except: pass
-             
-    c_info = xml_data.get("customer")
-    if isinstance(c_info, dict):
-        cust = CustomerInfo(
-            name=c_info.get("name"), phone=c_info.get("phone"), email=c_info.get("email"),
-            city=c_info.get("city"), state=c_info.get("state"),
-            interested_vehicle=c_info.get("interested_vehicle"), trade_in=c_info.get("trade_in")
-        )
-    else:
-        cust = CustomerInfo(
-            name=context_info.get("customer_name"), phone=context_info.get("customer_phone"), email=context_info.get("customer_email"),
-            city=context_info.get("customer_city"), state=context_info.get("customer_state"),
-            interested_vehicle=json.loads(context_info.get("interested_vehicle", "{}")) if context_info.get("interested_vehicle") else None,
-            trade_in=json.loads(context_info.get("trade_in", "{}")) if context_info.get("trade_in") else None
-        )
+    elif context_info.get("interested_vehicle"):
+        try:
+            interested_vehicle = json.loads(context_info["interested_vehicle"])
+        except Exception:
+            pass
+
+    trade_in = None
+    if ti_xml:
+        trade_in = dict(ti_xml)
+    elif context_info.get("trade_in_vehicle"):
+        trade_in = {"vehicle": context_info.get("trade_in_vehicle"), "estimated_value": context_info.get("trade_in_estimated_value")}
+
+    cust = CustomerInfo(
+        name=_v(c_xml, "Name") or context_info.get("customer_name") or None,
+        phone=phone,
+        email=_v(c_xml, "Email") or context_info.get("customer_email") or None,
+        city=_v(c_xml, "City") or context_info.get("customer_city") or None,
+        state=_v(c_xml, "State") or context_info.get("customer_state") or None,
+        interested_vehicle=interested_vehicle,
+        trade_in=trade_in,
+    )
+
+    context_datetime = (
+        _v(dt_xml, "CurrentDateTime")
+        or context_info.get("context_datetime")
+    )
 
     system_context = SystemContext(
         dealership=dealer, customer=cust,
-        context_datetime=context_info.get("context_datetime"),
+        context_datetime=context_datetime,
         raw_system_prompt=raw_prompt
     )
 
@@ -104,18 +144,18 @@ def build_context(call_id: str, source: DataSource) -> ContextJSON:
         for tc in tool_calls:
             tc_id = tc["tool_call_id"]
             turn = msg_id_to_turn.get(tc.get("message_id"), 0)
-            
+
             args = tc.get("arguments_json", "{}")
             if isinstance(args, str):
                 try: args = json.loads(args)
                 except: args = {}
-                
+
             tr = tool_results_map.get(tc_id, {})
             res = tr.get("result_json")
             if isinstance(res, str):
                 try: res = json.loads(res)
                 except: res = {"raw_result": res}
-                
+
             events.append(ToolEvent(
                 turn=turn, tool_call_id=tc_id, tool=tc.get("tool_name", "unknown"),
                 args=args, result=res if tr else None,
@@ -153,10 +193,10 @@ if __name__ == "__main__":
         source = SupabaseDataSource()
     else:
         raise ValueError(f"Unknown source {args.source}")
-    
+
     ctx = build_context(args.call_id, source)
     ctx = compute_latency(ctx)
-    
+
     if args.out:
         with open(args.out, "w") as f:
             json.dump(ctx, f, indent=2)
