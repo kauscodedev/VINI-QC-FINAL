@@ -1,0 +1,10 @@
+CREATE INDEX idx_calls_agent         ON calls(agent_name);
+CREATE INDEX idx_calls_start_time    ON calls(call_start_time);
+CREATE INDEX idx_messages_call       ON messages(call_id, turn);
+CREATE INDEX idx_tool_events_call    ON tool_events(call_id);
+CREATE INDEX idx_tool_events_tool    ON tool_events(tool_name);
+CREATE INDEX idx_scores_dimension    ON dimension_scores(dimension, score);
+CREATE INDEX idx_scores_scored_at    ON dimension_scores(scored_at);
+CREATE INDEX idx_issues_type         ON issues(issue_type, severity);
+CREATE INDEX idx_issues_detected_at  ON issues(detected_at);
+CREATE INDEX idx_overall_scored_at   ON call_overall_scores(scored_at);

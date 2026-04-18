@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python etl.py --verbose)",
+      "Bash(python3 etl.py --verbose)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

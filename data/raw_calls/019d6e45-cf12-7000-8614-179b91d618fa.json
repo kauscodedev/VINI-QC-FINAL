@@ -1,0 +1,14 @@
+{
+  "callId": "019d6e45-cf12-7000-8614-179b91d618fa",
+  "callDetails": {
+    "agentInfo": {
+      "agentName": "Emily Carter",
+      "agentType": "Sales"
+    },
+    "callType": "inboundPhoneCall",
+    "endedReason": "twilio-reported-customer-misdialed",
+    "messagesWithToolCalls": []
+  },
+  "enterpriseId": "3884c7156",
+  "teamId": "8559da8aef"
+}

@@ -1,0 +1,30 @@
+# Environment & secrets
+.env
+.env.*
+
+# Database
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Outputs (generated artifacts, not source)
+outputs/
