@@ -1,12 +1,13 @@
 'use client';
 
-import { ShieldCheck, Settings, FileText } from 'lucide-react';
+import { ShieldCheck, Settings, FileText, Cpu } from 'lucide-react';
 
 interface Insight {
   id?: string;
-  batch_id?: string;
-  root_cause?: string;
-  proposed_fix?: string;
+  gap_id?: string;
+  root_cause_type?: string;
+  analysis?: string;
+  proposed_remediation?: string;
 }
 
 interface RemediationInsightsProps {
@@ -18,10 +19,11 @@ export function RemediationInsights({ insights }: RemediationInsightsProps) {
     return null;
   }
 
-  const getIcon = (cause?: string) => {
-    const c = cause?.toLowerCase() || '';
-    if (c.includes('prompt')) return <FileText className="w-5 h-5 text-purple-500" />;
-    if (c.includes('config') || c.includes('setup')) return <Settings className="w-5 h-5 text-blue-500" />;
+  const getIcon = (type?: string) => {
+    const t = type?.toLowerCase() || '';
+    if (t.includes('prompt')) return <FileText className="w-5 h-5 text-purple-500" />;
+    if (t.includes('config') || t.includes('setup')) return <Settings className="w-5 h-5 text-blue-500" />;
+    if (t.includes('model')) return <Cpu className="w-5 h-5 text-emerald-500" />;
     return <ShieldCheck className="w-5 h-5 text-brand-500" />;
   };
 
@@ -49,7 +51,7 @@ export function RemediationInsights({ insights }: RemediationInsightsProps) {
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-slate-800 rounded-xl">
-                {getIcon(insight.root_cause)}
+                {getIcon(insight.root_cause_type)}
               </div>
               <h3 className="font-bold text-white uppercase text-xs tracking-widest text-slate-400">
                 Strategic Insight #{idx + 1}
@@ -58,19 +60,19 @@ export function RemediationInsights({ insights }: RemediationInsightsProps) {
 
             <div className="mb-4">
               <span className="text-[10px] font-black uppercase text-brand-400 tracking-widest block mb-1">
-                Root Cause Analysis
+                Root Cause: {insight.root_cause_type?.replace(/_/g, ' ') || 'General'}
               </span>
               <p className="text-sm font-medium text-slate-200">
-                {insight.root_cause}
+                {insight.analysis}
               </p>
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5">
               <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest block mb-1">
-                Proposed Fix
+                Proposed Remediation
               </span>
               <p className="text-sm font-bold text-white leading-relaxed">
-                {insight.proposed_fix}
+                {insight.proposed_remediation}
               </p>
             </div>
           </div>

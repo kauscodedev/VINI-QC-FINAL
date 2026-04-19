@@ -30,7 +30,7 @@ async function fetchData() {
     supabase.from("dimension_scores").select("dimension, score, bucket"),
     supabase.from("issues").select("severity, issue_type"),
     supabase.from("capability_gaps").select("gap_type, pattern, affected_calls, recommendation").order("surfaced_at", { ascending: false }).limit(4),
-    supabase.from("remediation_insights").select("id, batch_id, root_cause, proposed_fix").limit(4),
+    supabase.from("remediation_insights").select("id, gap_id, root_cause_type, analysis, proposed_remediation").limit(4),
   ]);
 
   const errors = [callsRes.error, contextsRes.error, classificationsRes.error, overallRes.error, dimRes.error, issuesRes.error, gapsRes.error, remediationRes.error].filter(Boolean);
