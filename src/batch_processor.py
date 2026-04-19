@@ -22,14 +22,25 @@ async def run_all_time_aggregation(write: bool = True) -> Dict[str, Any]:
 
     logger.info("Starting all-time batch aggregation...")
 
-    # 1. Fetch relevant data
-    # We need call_overall_scores for averages, and issues for gap analysis.
+    # We need call_overall_scores for averages.
     overall_resp = supabase.table("call_overall_scores").select("*").execute()
-    issues_resp = supabase.table("issues").select("*").execute()
-    dim_scores_resp = supabase.table("dimension_scores").select("dimension, score, bucket").execute()
-    
     overalls = overall_resp.data
-    issues = issues_resp.data
+    
+    # We only want to run Gap Analysis (LLM) on NEW calls to save tokens.
+    # Get IDs of calls that haven't been summarized yet.
+    unanalyzed_ids = [r["call_id"] for r in overalls if not r.get("is_fully_analyzed", False)]
+    
+    if unanalyzed_ids:
+        # Fetch issues only for these new calls
+        issues_resp = supabase.table("issues")\
+            .select("*")\
+            .in_("call_id", unanalyzed_ids)\
+            .execute()
+        issues = issues_resp.data
+    else:
+        issues = []
+    
+    dim_scores_resp = supabase.table("dimension_scores").select("dimension, score, bucket").execute()
     dim_scores = dim_scores_resp.data
 
     if not overalls:
@@ -76,7 +87,18 @@ async def run_all_time_aggregation(write: bool = True) -> Dict[str, Any]:
     ]
     
     # Run gap analysis (this uses OpenAI)
-    gap_result: GapAnalysisResult = await analyze_gaps(issues_for_judge)
+    # We prioritize critical issues and cap total items to avoid API limits.
+    criticals = [i for i in issues_for_judge if i["severity"] == "critical"]
+    warnings = [i for i in issues_for_judge if i["severity"] == "warning"]
+    
+    # Take all criticals (usually fewer) and enough warnings to fill a buffer of 300
+    limited_issues = criticals[:200]
+    needed = 300 - len(limited_issues)
+    if needed > 0:
+        limited_issues.extend(warnings[:needed])
+        
+    logger.info(f"Passing {len(limited_issues)} sampled issues to gap analyzer (from {len(issues_for_judge)} total).")
+    gap_result: GapAnalysisResult = await analyze_gaps(limited_issues)
 
     # 4. Write to Supabase
     batch_id = f"all_time_{datetime.now().strftime('%Y%p%d_%H%M')}"
@@ -111,6 +133,15 @@ async def run_all_time_aggregation(write: bool = True) -> Dict[str, Any]:
                     "recommendation": g.recommendation,
                 })
             supabase.table("capability_gaps").insert(gap_rows).execute()
+        
+        # 5. Mark these calls as analyzed so we don't process them again next time
+        unprocessed_ids = [r["call_id"] for r in overalls if not r.get("is_fully_analyzed", False)]
+        if unprocessed_ids:
+            logger.info(f"Marking {len(unprocessed_ids)} calls as fully analyzed.")
+            supabase.table("call_overall_scores")\
+                .update({"is_fully_analyzed": True})\
+                .in_("call_id", unprocessed_ids)\
+                .execute()
 
     logger.info(f"Batch aggregation complete: {batch_id}. Wrote {len(gap_result.gaps)} gaps.")
     

@@ -24,7 +24,7 @@ Categorize each gap into one of these types:
 For each identified pattern:
 - **Gap Type**: One of the types above.
 - **Pattern**: A concise description of the recurring failure (e.g., "Agents consistently ignore 'DEPARTMENT_CLOSED' guidance from the transfer tool").
-- **Affected Calls**: A list of the `call_id`s where this specific pattern was observed.
+- **Affected Calls**: A list of **up to 5** example `call_id`s where this specific pattern was observed (to keep the response concise).
 - **Recommendation**: A concrete, actionable step to fix the gap (e.g., "Update the 'Escalation' prompt to explicitly forbid transfer retries after a 'DEPARTMENT_CLOSED' status").
 
 ## Rules

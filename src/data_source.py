@@ -4,6 +4,7 @@ import sqlite3
 class DataSource(Protocol):
     def get_call(self, call_id: str) -> Dict[str, Any]: ...
     def list_call_ids(self) -> List[str]: ...
+    def list_unprocessed_call_ids(self) -> List[str]: ...
 
 class SQLiteDataSource:
     def __init__(self, db_path: str):
@@ -38,6 +39,12 @@ class SQLiteDataSource:
             rows = conn.execute("SELECT call_id FROM calls").fetchall()
             return [row["call_id"] for row in rows]
 
+    def list_unprocessed_call_ids(self) -> List[str]:
+        # Local SQLite doesn't track overall scores the same way yet, 
+        # but for consistency we'll return all IDs. 
+        # In this project, Supabase is the main scoring target.
+        return self.list_call_ids()
+
 class SupabaseDataSource:
     def __init__(self):
         from .supabase_client import supabase
@@ -66,3 +73,14 @@ class SupabaseDataSource:
     def list_call_ids(self) -> List[str]:
         resp = self.supabase.table("calls").select("call_id").execute()
         return [row["call_id"] for row in resp.data]
+
+    def list_unprocessed_call_ids(self) -> List[str]:
+        # 1. Get all scored IDs
+        scored_resp = self.supabase.table("call_overall_scores").select("call_id").execute()
+        scored_ids = {row["call_id"] for row in scored_resp.data}
+        
+        # 2. Get all call IDs
+        all_ids = self.list_call_ids()
+        
+        # 3. Filter
+        return [cid for cid in all_ids if cid not in scored_ids]

@@ -207,13 +207,14 @@ async def evaluate_all(
     limit: Optional[int] = None,
     write: bool = True,
     track: str = "both",
+    unprocessed_only: bool = False,
 ) -> list:
     """Evaluate every call in the source, sequentially (to respect OpenAI rate limits).
-
-    track: 'both' runs technical+behavioral, 'behavioral' only runs the 6 SDR judges
-    and reuses existing classification from Supabase.
     """
-    call_ids = source.list_call_ids()
+    if unprocessed_only:
+        call_ids = source.list_unprocessed_call_ids()
+    else:
+        call_ids = source.list_call_ids()
     if limit:
         call_ids = call_ids[:limit]
 
@@ -238,6 +239,7 @@ def _main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--call-id", help="Evaluate a single call")
     parser.add_argument("--all", action="store_true", help="Evaluate every call")
+    parser.add_argument("--unprocessed", action="store_true", help="Only evaluate calls without scores")
     parser.add_argument("--limit", type=int, help="Cap --all to N calls (for testing)")
     parser.add_argument("--source", default="sqlite", choices=["sqlite", "supabase"])
     parser.add_argument("--dry-run", action="store_true", help="Don't write to Supabase")
@@ -264,8 +266,14 @@ def _main():
     if args.call_id:
         result = asyncio.run(runner(args.call_id, source, write=write))
         print(json.dumps(result, indent=2))
-    elif args.all:
-        results = asyncio.run(evaluate_all(source, limit=args.limit, write=write, track=args.track))
+    elif args.all or args.unprocessed:
+        results = asyncio.run(evaluate_all(
+            source, 
+            limit=args.limit, 
+            write=write, 
+            track=args.track, 
+            unprocessed_only=args.unprocessed
+        ))
         ok = [r for r in results if "error" not in r]
         fail = [r for r in results if "error" in r]
         print(f"\nEvaluated {len(ok)} calls successfully, {len(fail)} failed.")

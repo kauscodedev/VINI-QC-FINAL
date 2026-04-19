@@ -50,7 +50,9 @@ def migrate():
             "call_end_time": ms_to_timestamp(c["call_end_time_ms"]),
             "duration_ms": c.get("duration") if "duration" in c.keys() else None,
             "total_messages": c["total_messages"],
-            "source_file": c["source_file"]
+            "source_file": c["source_file"],
+            "recording_url": c.get("recording_url"),
+            "external_created_at": c.get("external_created_at")
         })
     for i in range(0, len(calls_data), BATCH_SIZE):
         supabase.table("calls").upsert(calls_data[i:i+BATCH_SIZE], on_conflict="call_id").execute()

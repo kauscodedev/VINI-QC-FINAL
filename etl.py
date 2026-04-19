@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS calls (
     call_start_time_ms  INTEGER,
     call_end_time_ms    INTEGER,
     total_messages      INTEGER,
-    source_file         TEXT
+    source_file         TEXT,
+    recording_url       TEXT,
+    external_created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS call_context (
@@ -169,12 +171,15 @@ def _process_file(conn, json_path, verbose):
     conn.execute(
         """INSERT OR REPLACE INTO calls
            (call_id, enterprise_id, team_id, agent_name, agent_type, call_type, ended_reason,
-            call_start_time_ms, call_end_time_ms, total_messages, source_file)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            call_start_time_ms, call_end_time_ms, total_messages, source_file,
+            recording_url, external_created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (call_id, data.get("enterpriseId", ""), data.get("teamId", ""),
          ai.get("agentName", ""), ai.get("agentType", ""),
          cd.get("callType", ""), cd.get("endedReason", ""),
-         start_ms, end_ms, len(msgs), json_path.name),
+         start_ms, end_ms, len(msgs), json_path.name,
+         cd.get("recordingUrl"),
+         data.get("createdAt", {}).get("$date") if isinstance(data.get("createdAt"), dict) else data.get("createdAt")),
     )
 
     system_prompt_raw = None
@@ -266,11 +271,13 @@ def _process_file(conn, json_path, verbose):
 def main():
     parser = argparse.ArgumentParser(description="ETL: inbound sales call JSONs → SQLite")
     parser.add_argument("--db",      default=str(DATA_DIR / "calls.db"), help="Output SQLite path")
+    parser.add_argument("--source",  default=str(DATA_DIR), help="Source directory containing JSON files")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     db_path    = Path(args.db)
-    json_files = sorted(DATA_DIR.glob("*.json"))
+    source_dir = Path(args.source)
+    json_files = sorted(source_dir.glob("*.json"))
 
     print(f"Processing {len(json_files)} files → {db_path}")
 
