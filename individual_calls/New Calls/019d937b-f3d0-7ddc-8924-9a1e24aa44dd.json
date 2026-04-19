@@ -1,0 +1,17 @@
+{
+  "callId": "019d937b-f3d0-7ddc-8924-9a1e24aa44dd",
+  "callDetails": {
+    "agentInfo": {
+      "agentName": "Emily Carter",
+      "agentType": "Sales"
+    },
+    "callType": "inboundPhoneCall",
+    "recordingUrl": null,
+    "messagesWithToolCalls": []
+  },
+  "createdAt": {
+    "$date": "2026-04-15T23:31:31.955Z"
+  },
+  "enterpriseId": "3884c7156",
+  "teamId": "8559da8aef"
+}

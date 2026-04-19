@@ -1,0 +1,17 @@
+{
+  "callId": "019d8c09-5fad-7661-a791-61dc290802fb",
+  "callDetails": {
+    "agentInfo": {
+      "agentName": "Stacey",
+      "agentType": "Sales"
+    },
+    "callType": "inboundPhoneCall",
+    "recordingUrl": null,
+    "messagesWithToolCalls": []
+  },
+  "createdAt": {
+    "$date": "2026-04-14T12:49:05.814Z"
+  },
+  "enterpriseId": "acb5f83e1",
+  "teamId": "987d7cb5f5"
+}

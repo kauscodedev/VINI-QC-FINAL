@@ -1,0 +1,17 @@
+{
+  "callId": "019d9187-0d58-777b-9530-2874cc37c161",
+  "callDetails": {
+    "agentInfo": {
+      "agentName": "Vini",
+      "agentType": "Sales"
+    },
+    "callType": "inboundPhoneCall",
+    "recordingUrl": null,
+    "messagesWithToolCalls": []
+  },
+  "createdAt": {
+    "$date": "2026-04-15T14:24:19.198Z"
+  },
+  "enterpriseId": "ef889a294",
+  "teamId": "f89ae024ba"
+}
