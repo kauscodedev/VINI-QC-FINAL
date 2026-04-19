@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A QC scoring pipeline for AI voice-agent sales calls. Reads call transcripts (JSON → SQLite → Supabase), runs LLM judges across **two parallel tracks** — a technical track (6 correctness dims) and a behavioral / SDR-lens track (6 SDR-performance dims) — and writes scores and issues to Supabase for a leadership dashboard. Full design in `ARCHITECTURE.md`.
 
-**Current state:** All 76 calls have been scored end-to-end on **both tracks**. Supabase contains 912 dimension rows (456 technical + 456 behavioral), 335 issues (129 tech + 206 behavioral), and 76 overall rows with both tracks' overall scores populated. Phase 4 (dashboard) not started.
+**Current state:** All 76 calls have been scored end-to-end on **both tracks**. Supabase contains 912 dimension rows, 335 issues, and 76 overall rows. **Batch Aggegration and Remediation Insights** are now active, populating `batch_runs`, `capability_gaps`, and `remediation_insights` with deep-dive root-cause analysis.
 
 ---
 
@@ -41,10 +41,13 @@ python3 -m src.orchestrator --call-id <id> --track behavioral
 python3 -m src.run_classification
 python3 -m src.run_classification --call-id <id> --dry-run
 
-# Data plumbing
-python3 etl.py --verbose                                                   # 76 JSONs → calls.db
-python3 -m src.migrate_sqlite_to_supabase                                  # SQLite → Supabase
-python3 -m src.context_builder --call-id <id> --source sqlite --out outputs/ctx.json
+# Batch runs & Capability Gaps
+python3 -m src.batch_processor                                             # Runs "all-time" aggregation
+python3 -m src.batch_processor --dry-run                                   # View stats & gaps in CLI
+
+# Remediation Analysis (Root Cause)
+python3 -m src.run_remediation_analysis --batch-id <id>                    # Diagonse gaps in a batch
+python3 -m src.run_remediation_analysis --batch-id <id> --dry-run           # View insights in CLI
 
 # Tests & linting
 pytest tests/ -v
@@ -71,7 +74,13 @@ calls.db / Supabase  →  context_builder  →  compute_latency  →  classify_c
                      │                           │
                      └────────────┬──────────────┘
                                   ▼
-                               writer → Supabase (5 tables)
+                            writer → Supabase (5 tables)
+                                  │
+                                  ▼
+                          batch_processor (Capability Gaps)
+                                  │
+                                  ▼
+                         remediation_judge (Root Cause Analysis)
 ```
 
 **DataSource abstraction** (`src/data_source.py`): `SQLiteDataSource` and `SupabaseDataSource` implement the same Protocol. `build_context()` normalizes both into identical `ContextJSON`.
@@ -97,14 +106,15 @@ calls.db / Supabase  →  context_builder  →  compute_latency  →  classify_c
 | `call_classifications` | 1 per call | `call_type`, `primary_intent`, `reasoning`, `model` |
 | `dimension_scores` | **12 per call** | `dimension`, `score` (1–3 or NULL), `score_na`, `reasoning`, `weight`, `model`, **`bucket`** |
 | `tool_scores` | 0–N per call | `tool_call_id`, `tool_name`, `score`, `reasoning` (from technical `tool_accuracy` only) |
-| `issues` | 0–N per call | `dimension`, `issue_type`, `severity`, `turn_number`, `evidence` (JSONB `{"text": …}`), **`bucket`** |
-| `call_overall_scores` | 1 per call | Technical: `technical_overall_score`, `technical_calculation`, `technical_critical_count`, `technical_warning_count`, `technical_recommendation`. Behavioral: `behavioral_overall_score`, `behavioral_calculation`, `behavioral_critical_count`, `behavioral_warning_count`, `behavioral_recommendation` |
+| `issues` | 0–N per call | `dimension`, `issue_type`, `severity`, `turn_number`, `evidence`, `bucket` |
+| `call_overall_scores` | 1 per call | Denormalized overall scores for both tracks |
+| `batch_runs` | 1 per batch | Aggregate stats (avg, median, score distribution) |
+| `capability_gaps` | 1+ per batch | Recurring failure patterns identified by LLM |
+| `remediation_insights` | 1+ per gap | **Root Cause Analysis** (Prompt vs Config vs Setup) + proposed fix |
 
 `issues.evidence` is `JSONB NOT NULL`; `Issue.evidence` is `str` in Pydantic (OpenAI strict mode disallows open dicts). The writer wraps as `{"text": <evidence>}` at insert time.
 
-DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_indexes.sql](sql/002_indexes.sql)); the two-track extension is in [sql/003_behavioral_columns.sql](sql/003_behavioral_columns.sql); the technical-column prefix rename is in [sql/004_rename_technical_columns.sql](sql/004_rename_technical_columns.sql). Apply SQL files in numerical order via Supabase SQL Editor.
-
-Tables `batch_runs` and `capability_gaps` exist but are not populated yet.
+DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_indexes.sql](sql/002_indexes.sql)); the two-track extension is in [sql/003_behavioral_columns.sql](sql/003_behavioral_columns.sql); the technical-column prefix rename is in [sql/004_rename_technical_columns.sql](sql/004_rename_technical_columns.sql); remediation schema in [sql/005_remediation_schema.sql](sql/005_remediation_schema.sql).
 
 ---
 
@@ -129,13 +139,14 @@ Tables `batch_runs` and `capability_gaps` exist but are not populated yet.
 | `src/judges/classify.py` | Classification judge (`gpt-4o-mini`, structured outputs) |
 | `src/judges/{information_accuracy,tool_accuracy,escalation,conversion,conversation_quality}.py` | 5 technical LLM judges |
 | `src/judges/latency_score.py` | Programmatic DimensionScore adapter for latency |
-| `src/judges/behavior_{opening_tone,intent_discovery,resolution_accuracy,objection_recovery,conversation_management,conversion_next_step}.py` | 6 behavioral LLM judges |
-| `src/run_classification.py` | Classification-only batch runner (predates orchestrator) |
-| `src/migrate_sqlite_to_supabase.py` | One-shot Phase 1.5 migration |
-| `prompts/judge_*.md` | Technical prompts (5) |
-| `prompts/behavior_*.md` | Behavioral prompts (6) |
-| `prompts/classify_call.md` | Classifier prompt |
-| `Eval Spec Sales IB/` | Reference eval specs that informed prompts |
+| `src/judges/behavior_{6_dims}.py` | 6 behavioral LLM judges |
+| `src/judges/gap_analyzer.py` | Synthesizes issues into high-level gaps |
+| `src/judges/remediation_judge.py` | Diagnoses root causes (prompt vs config vs data) |
+| `src/batch_processor.py` | Computes aggregate stats + calls gap analyzer |
+| `src/run_remediation_analysis.py` | CLI to run deep insights on batch gaps |
+| `src/remediation_schemas.py` | Models for root cause and remediation |
+| `prompts/judge_gap_analysis.md` | "Performance Analyst" prompt for batch patterns |
+| `prompts/judge_remediation.md` | "Senior Architect" prompt for root cause analysis |
 | `tests/fixtures/expected_019d6a86.json` | Golden regression fixture |
 
 ---
