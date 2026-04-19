@@ -1,8 +1,13 @@
-"""Aggregate 6 dimension scores into an overall call score + recommendation."""
+"""Aggregate dimension scores into an overall call score + recommendation.
+
+Supports two evaluation tracks, called with different weight dicts:
+- Technical track (DIMENSION_WEIGHTS)
+- Behavioral / SDR-lens track (BEHAVIORAL_WEIGHTS)
+"""
 from typing import Dict, List, Tuple
 from .schemas import DimensionScore, Issue, ToolAccuracyResult
 
-# Base weights (sum = 1.0). If any dimension is N/A, weights are renormalized.
+# Technical track weights (sum = 1.0).
 DIMENSION_WEIGHTS: Dict[str, float] = {
     "information_accuracy": 0.20,
     "conversion": 0.20,
@@ -12,15 +17,30 @@ DIMENSION_WEIGHTS: Dict[str, float] = {
     "response_latency": 0.10,
 }
 
+# Behavioral / SDR-lens track weights (sum = 1.0). Per PM doc SalesIBEvaluationscore.rtf.
+BEHAVIORAL_WEIGHTS: Dict[str, float] = {
+    "behavior_opening_tone": 0.10,
+    "behavior_intent_discovery": 0.20,
+    "behavior_resolution_accuracy": 0.20,
+    "behavior_objection_recovery": 0.15,
+    "behavior_conversation_management": 0.10,
+    "behavior_conversion_next_step": 0.25,
+}
+
+# Combined lookup for writers that need per-dimension weight regardless of track.
+ALL_WEIGHTS: Dict[str, float] = {**DIMENSION_WEIGHTS, **BEHAVIORAL_WEIGHTS}
+
 
 def aggregate(
     dimension_results: Dict[str, DimensionScore],
+    weights: Dict[str, float] = DIMENSION_WEIGHTS,
 ) -> Tuple[float, str, int, int, str]:
     """Compute overall score, calculation trace, issue counts, and recommendation.
 
     Args:
         dimension_results: mapping of dimension name → DimensionScore
             (for tool_accuracy, pass the DimensionScore view; tool_scores handled separately)
+        weights: weight dict for the track being aggregated. Defaults to technical.
 
     Returns:
         (overall_score, calculation_trace, critical_count, warning_count, recommendation)
@@ -33,14 +53,14 @@ def aggregate(
     if not active:
         return (0.0, "All dimensions N/A — no score computed.", 0, 0, "REVIEW")
 
-    total_weight = sum(DIMENSION_WEIGHTS[name] for name in active)
+    total_weight = sum(weights[name] for name in active)
     if total_weight == 0:
         return (0.0, "No active dimensions with weight.", 0, 0, "REVIEW")
 
     weighted_sum = 0.0
     trace_parts: List[str] = []
     for name, ds in active.items():
-        renorm_weight = DIMENSION_WEIGHTS[name] / total_weight
+        renorm_weight = weights[name] / total_weight
         contribution = ds.score * renorm_weight
         weighted_sum += contribution
         trace_parts.append(f"{name}={ds.score}×{renorm_weight:.3f}")

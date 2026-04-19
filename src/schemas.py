@@ -121,3 +121,12 @@ class ToolAccuracyResult(BaseModel):
     reasoning: str
     issues: List[Issue] = Field(default_factory=list)
     tool_scores: List[ToolScore] = Field(default_factory=list)
+
+class CapabilityGap(BaseModel):
+    gap_type: Literal["agent_behavior", "tool_failure_handling", "knowledge_gap", "system_latency"]
+    pattern: str = Field(description="Concise description of the recurring failure pattern")
+    affected_calls: List[str] = Field(description="List of call IDs exhibiting this pattern")
+    recommendation: str = Field(description="Actionable step to fix the gap")
+
+class GapAnalysisResult(BaseModel):
+    gaps: List[CapabilityGap]

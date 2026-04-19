@@ -8,7 +8,10 @@
       "Bash(python3)",
       "Bash(python3 -c \"import json; d = json.load\\(open\\('/Users/kaustubhchauhan/Downloads/inbound_sales_calls/data/raw_calls/019d6a86-8665-788e-a91b-8b9cf7247192.json'\\)\\); print\\('keys:', list\\(d.keys\\(\\)\\)\\)\")",
       "Bash(python3 -m src.migrate_sqlite_to_supabase)",
-      "Bash(python3 -c \"import openai; print\\('openai', openai.__version__\\)\")"
+      "Bash(python3 -c \"import openai; print\\('openai', openai.__version__\\)\")",
+      "Bash(python3 -m src.orchestrator --call-id 019d6a86-8665-788e-a91b-8b9cf7247192 --source sqlite --dry-run)",
+      "Bash(python3 -m src.orchestrator --call-id 019d6a86-8665-788e-a91b-8b9cf7247192 --source sqlite --track behavioral)",
+      "Bash(python3 -m src.orchestrator --all --source sqlite --track behavioral)"
     ]
   }
 }
