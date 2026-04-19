@@ -43,7 +43,8 @@ export default function Dashboard() {
       setRefreshing(true);
       const res = await fetch('/api/dashboard');
       if (!res.ok) {
-        throw new Error(`API error: ${res.statusText}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `API error: ${res.statusText}`);
       }
       const json = await res.json();
       setData(json);
