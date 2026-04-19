@@ -2,6 +2,8 @@ import sqlite3
 import json
 import logging
 from .supabase_client import supabase
+from .context_builder import build_context
+from .data_source import SQLiteDataSource
 from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -53,48 +55,36 @@ def migrate():
     for i in range(0, len(calls_data), BATCH_SIZE):
         supabase.table("calls").upsert(calls_data[i:i+BATCH_SIZE], on_conflict="call_id").execute()
 
-    # 2. call_contexts
+    # 2. call_contexts — SQLite columns are all empty; parse from raw XML via build_context
     logging.info("Migrating call_contexts...")
-    contexts = conn.execute("SELECT * FROM call_context").fetchall()
+    sqlite_source = SQLiteDataSource("calls.db")
+    call_ids = [dict(row)["call_id"] for row in conn.execute("SELECT call_id FROM call_context").fetchall()]
     contexts_data = []
-    for row in contexts:
-        c = dict(row)
-        trade_in = None
-        if c.get("trade_in_vehicle") or c.get("trade_in_estimated_value"):
-            trade_in = {
-                "vehicle": c.get("trade_in_vehicle"),
-                "estimated_value": c.get("trade_in_estimated_value")
-            }
-        
-        iv = None
-        if c.get("interested_vehicle_make") or c.get("interested_vehicle_model"):
-            iv = {
-                "make": c.get("interested_vehicle_make"),
-                "model": c.get("interested_vehicle_model"),
-                "year": c.get("interested_vehicle_year"),
-                "vin": c.get("interested_vehicle_vin"),
-                "stock": c.get("interested_vehicle_stock"),
-                "trim": c.get("interested_vehicle_trim"),
-                "is_sold": c.get("interested_vehicle_is_sold")
-            }
-
-        contexts_data.append({
-            "call_id": c["call_id"],
-            "dealership_name": c["dealership_name"],
-            "dealership_address": c["dealership_address"],
-            "dealership_inventory_type": c["dealership_inventory_type"],
-            "dealership_sales_hours": safe_json(c["dealership_sales_hours"]) if c["dealership_sales_hours"] else None,
-            "dealership_service_hours": safe_json(c["dealership_service_hours"]) if c["dealership_service_hours"] else None,
-            "customer_name": c["customer_name"],
-            "customer_phone": c["customer_phone"],
-            "customer_email": c["customer_email"],
-            "customer_city": c["customer_city"],
-            "customer_state": c["customer_state"],
-            "interested_vehicle": iv,
-            "trade_in": trade_in,
-            "context_datetime": None,
-            "raw_system_prompt": c["system_prompt_raw"]
-        })
+    for call_id in call_ids:
+        try:
+            ctx = build_context(call_id, sqlite_source)
+            sc = ctx["system_context"]
+            dealer = sc.get("dealership") or {}
+            customer = sc.get("customer") or {}
+            contexts_data.append({
+                "call_id": call_id,
+                "dealership_name": dealer.get("name"),
+                "dealership_address": dealer.get("address"),
+                "dealership_inventory_type": dealer.get("inventory_type"),
+                "dealership_sales_hours": dealer.get("sales_hours"),
+                "dealership_service_hours": dealer.get("service_hours"),
+                "customer_name": customer.get("name"),
+                "customer_phone": customer.get("phone"),
+                "customer_email": customer.get("email"),
+                "customer_city": customer.get("city"),
+                "customer_state": customer.get("state"),
+                "interested_vehicle": customer.get("interested_vehicle"),
+                "trade_in": customer.get("trade_in"),
+                "context_datetime": sc.get("context_datetime") or None,
+                "raw_system_prompt": sc.get("raw_system_prompt"),
+            })
+        except Exception as e:
+            logging.error(f"Failed to build context for {call_id}: {e}")
     for i in range(0, len(contexts_data), BATCH_SIZE):
         supabase.table("call_contexts").upsert(contexts_data[i:i+BATCH_SIZE], on_conflict="call_id").execute()
 

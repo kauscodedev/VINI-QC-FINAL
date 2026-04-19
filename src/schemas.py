@@ -100,7 +100,7 @@ class Issue(BaseModel):
     issue_type: str
     severity: Literal["warning", "critical"]
     turn_number: Optional[int]
-    evidence: Dict[str, Any]
+    evidence: str = Field(description="Short quote or description of what triggered this issue")
 
 class DimensionScore(BaseModel):
     score: Optional[Literal[1, 2, 3]] = Field(description="1, 2, or 3. None if N/A")
@@ -113,3 +113,11 @@ class ToolScore(BaseModel):
     tool_name: str
     score: Literal[1, 2, 3]
     reasoning: str
+
+class ToolAccuracyResult(BaseModel):
+    """Output of the Tool Accuracy judge: overall dimension score + per-invocation scores."""
+    score: Optional[Literal[1, 2, 3]] = Field(description="1, 2, or 3. None if N/A")
+    score_na: bool = Field(description="Set to true if dimension is N/A (no tools expected)")
+    reasoning: str
+    issues: List[Issue] = Field(default_factory=list)
+    tool_scores: List[ToolScore] = Field(default_factory=list)

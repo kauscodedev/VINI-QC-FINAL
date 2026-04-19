@@ -1,11 +1,5 @@
-"""
-Call Classification Judge
--------------------------
-Runtime judge that calls OpenAI to classify a call into one of six types.
-Loads its system prompt from prompts/classify_call.md.
-"""
+"""Call Classification Judge — classifies a call into one of six types."""
 import os
-import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -23,44 +17,24 @@ MODEL = "gpt-4o-mini"
 
 
 def _load_system_prompt() -> str:
-    with open(PROMPT_PATH, "r") as f:
-        return f.read()
+    return PROMPT_PATH.read_text()
 
 
 def classify_call(transcript_text: str, model: Optional[str] = None) -> ClassificationResult:
-    """
-    Classify a call transcript into one of six call types.
-    
-    Args:
-        transcript_text: The formatted transcript string (from format_transcript).
-        model: Override the default model if desired.
-        
-    Returns:
-        ClassificationResult with call_type, primary_intent, and reasoning.
+    """Classify a call transcript into one of six call types.
+
+    Uses OpenAI structured outputs (`parse()`) with ClassificationResult as the response schema.
     """
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    system_prompt = _load_system_prompt()
-    use_model = model or MODEL
-
-    response = client.chat.completions.create(
-        model=use_model,
+    completion = client.beta.chat.completions.parse(
+        model=model or MODEL,
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Classify this call transcript:\n\n{transcript_text}"}
+            {"role": "system", "content": _load_system_prompt()},
+            {"role": "user", "content": f"Classify this call transcript:\n\n{transcript_text}"},
         ],
-        response_format={"type": "json_object"},
+        response_format=ClassificationResult,
         temperature=0.0,
-        max_tokens=500
     )
-
-    raw = response.choices[0].message.content
-    parsed = json.loads(raw)
-    
-    result = ClassificationResult(
-        call_type=parsed["call_type"],
-        primary_intent=parsed["primary_intent"],
-        reasoning=parsed["reasoning"]
-    )
-    
+    result = completion.choices[0].message.parsed
     logger.info(f"Classification: {result.call_type} | Intent: {result.primary_intent}")
     return result

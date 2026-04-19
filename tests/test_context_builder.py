@@ -19,10 +19,13 @@ def test_context_builder_happy_path(sqlite_source):
     ctx = compute_latency(ctx)
     
     assert ctx["call_id"] == call_id
-    assert len(ctx["transcript"]) == 32
-    # Verify tool events
+    # 32 rows in SQLite messages, but tool_calls/tool_call_result rows are filtered
+    # out of transcript (tool events live in ctx["tool_events"] instead).
+    assert len(ctx["transcript"]) == 26
     assert len(ctx["tool_events"]) == 3
     assert "latency_metrics" in ctx
+    # System context parsed out of the raw XML prompt
+    assert ctx["system_context"]["dealership"]["name"] == "WolfChase Honda"
     
     metrics = ctx["latency_metrics"]
     # Check if there are latency metrics extracted
