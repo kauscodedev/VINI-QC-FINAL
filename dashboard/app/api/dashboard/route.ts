@@ -116,6 +116,12 @@ async function fetchData() {
     };
   });
 
+  // Map affected_calls (TEXT[]) to a count for the frontend component
+  const capabilityGaps = (gapsRes.data ?? []).map(gap => ({
+    ...gap,
+    affected_calls: Array.isArray(gap.affected_calls) ? gap.affected_calls.length : 0
+  }));
+
   return {
     total_calls: totalCalls,
     average_technical_score: averageTechnicalScore,
@@ -128,7 +134,7 @@ async function fetchData() {
       top_issue_types: topIssueTypes,
     },
     calls,
-    capability_gaps: gapsRes.data ?? [],
+    capability_gaps: capabilityGaps,
     remediation_insights: remediationRes.data ?? [],
   };
 }

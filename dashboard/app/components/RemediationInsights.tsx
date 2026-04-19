@@ -1,6 +1,8 @@
 'use client';
 
-interface RemediationInsight {
+import { ShieldCheck, Settings, FileText } from 'lucide-react';
+
+interface Insight {
   id?: string;
   batch_id?: string;
   root_cause?: string;
@@ -8,51 +10,66 @@ interface RemediationInsight {
 }
 
 interface RemediationInsightsProps {
-  insights: RemediationInsight[];
+  insights: Insight[];
 }
 
 export function RemediationInsights({ insights }: RemediationInsightsProps) {
   if (!insights || insights.length === 0) {
-    return (
-      <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Remediation Insights
-        </h2>
-        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-          No insights available yet.
-        </p>
-      </div>
-    );
+    return null;
   }
 
-  return (
-    <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-        Remediation Insights
-      </h2>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Root cause analysis & proposed fixes
-      </p>
+  const getIcon = (cause?: string) => {
+    const c = cause?.toLowerCase() || '';
+    if (c.includes('prompt')) return <FileText className="w-5 h-5 text-purple-500" />;
+    if (c.includes('config') || c.includes('setup')) return <Settings className="w-5 h-5 text-blue-500" />;
+    return <ShieldCheck className="w-5 h-5 text-brand-500" />;
+  };
 
-      <div className="mt-6 space-y-4">
+  return (
+    <div className="mt-8 stat-card bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+      <div className="flex items-center gap-3 mb-8">
+        <div className="rounded-xl p-2 bg-brand-500/20 text-brand-400">
+          <ShieldCheck className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-white uppercase tracking-tight">
+            Root Cause & Remediation
+          </h2>
+          <p className="text-sm text-slate-400">
+            Deep-dive architect insights from the latest batch
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {insights.map((insight, idx) => (
           <div
             key={idx}
-            className="rounded border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
+            className="flex flex-col p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-sm"
           >
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                Root Cause
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-slate-800 rounded-xl">
+                {getIcon(insight.root_cause)}
+              </div>
+              <h3 className="font-bold text-white uppercase text-xs tracking-widest text-slate-400">
+                Strategic Insight #{idx + 1}
               </h3>
-              <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            </div>
+
+            <div className="mb-4">
+              <span className="text-[10px] font-black uppercase text-brand-400 tracking-widest block mb-1">
+                Root Cause Analysis
+              </span>
+              <p className="text-sm font-medium text-slate-200">
                 {insight.root_cause}
               </p>
             </div>
-            <div className="mt-3 border-t border-blue-200 pt-3 dark:border-blue-800">
-              <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400">
+
+            <div className="mt-auto pt-4 border-t border-white/5">
+              <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest block mb-1">
                 Proposed Fix
-              </h4>
-              <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+              </span>
+              <p className="text-sm font-bold text-white leading-relaxed">
                 {insight.proposed_fix}
               </p>
             </div>
