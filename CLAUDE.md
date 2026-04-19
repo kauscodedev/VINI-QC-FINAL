@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A QC scoring pipeline for AI voice-agent sales calls. Reads call transcripts (JSON → SQLite → Supabase), runs LLM judges across **two parallel tracks** — a technical track (6 correctness dims) and a behavioral / SDR-lens track (6 SDR-performance dims) — and writes scores and issues to Supabase for a leadership dashboard. Full design in `ARCHITECTURE.md`.
 
-**Current state:** All 76 calls have been scored end-to-end on **both tracks**. Supabase contains 912 dimension rows, 335 issues, and 76 overall rows. **Batch Aggegration and Remediation Insights** are now active, populating `batch_runs`, `capability_gaps`, and `remediation_insights` with deep-dive root-cause analysis.
+**Current state:** Incremental processing is active. Evaluations are tracking analysis status via `is_fully_analyzed`. Data is tiered into `Processed_calls` and `unprocessed_calls`.
 
 ---
 
@@ -16,42 +16,41 @@ Each call produces **12 dimension scores** — 6 technical + 6 behavioral. Every
 
 | Track | Focus | Dimensions (weights) |
 |---|---|---|
-| **technical** | *correctness* — did tools fire right, was info factual | information_accuracy 0.20 · conversion 0.20 · tool_accuracy 0.20 · escalation 0.15 · conversation_quality 0.15 · response_latency 0.10 |
-| **behavioral** | *SDR performance* — warmth, discovery, objection tactics | behavior_opening_tone 0.10 · behavior_intent_discovery 0.20 · behavior_resolution_accuracy 0.20 · behavior_objection_recovery 0.15 · behavior_conversation_management 0.10 · behavior_conversion_next_step 0.25 |
-
-Both tracks use the same **1–3 scale** (+ N/A) and the same `DimensionScore` Pydantic model. Behavioral prompts merged PM's original "0 = Failed" and "1 = Weak" levels into a single new level 1 so existing schema is unchanged.
+| **technical** | *correctness* | info_accuracy 0.2, conversion 0.2, tool_accuracy 0.2, escalation 0.15, conv_quality 0.15, latency 0.1 |
+| **behavioral** | *SDR performance* | opening 0.1, discovery 0.2, resolution 0.2, objection 0.15, management 0.1, next_step 0.25 |
 
 ---
 
 ## Commands
 
 ```bash
-# Full pipeline (technical + behavioral) — default
-python3 -m src.orchestrator --call-id 019d6a86-8665-788e-a91b-8b9cf7247192
-python3 -m src.orchestrator --all
-python3 -m src.orchestrator --all --source supabase
-python3 -m src.orchestrator --call-id <id> --dry-run
+# 1. INGEST (Staging area: data/unprocessed_calls)
+python3 etl.py --source "data/unprocessed_calls"
 
-# Behavioral-only — skips classify + 5 tech judges + latency. Reuses existing
-# call_classifications and preserves existing technical dimension_scores / issues rows.
-python3 -m src.orchestrator --all --track behavioral
-python3 -m src.orchestrator --call-id <id> --track behavioral
+# 2. MIGRATE (Push to Supabase)
+python3 -m src.migrate_sqlite_to_supabase
 
-# Classification only (predates orchestrator; still valid for classify-only workflows)
-python3 -m src.run_classification
-python3 -m src.run_classification --call-id <id> --dry-run
+# 3. EVALUATE (Incremental)
+python3 -m src.orchestrator --unprocessed --limit 100 --source supabase
+python3 -m src.orchestrator --call-id <id> --source supabase
 
-# Batch runs & Capability Gaps
-python3 -m src.batch_processor                                             # Runs "all-time" aggregation
-python3 -m src.batch_processor --dry-run                                   # View stats & gaps in CLI
+# 4. BATCH & REMEDIATION
+python3 -m src.batch_processor
+python3 -m src.run_remediation_analysis --batch-id <id>
 
-# Remediation Analysis (Root Cause)
-python3 -m src.run_remediation_analysis --batch-id <id>                    # Diagonse gaps in a batch
-python3 -m src.run_remediation_analysis --batch-id <id> --dry-run           # View insights in CLI
+# Behavioral-only partial track
+python3 -m src.orchestrator --unprocessed --track behavioral --source supabase
+```
 
-# Tests & linting
+## Tests & Linting
+```bash
 pytest tests/ -v
 ruff check src/ tests/
+```
+
+---
+
+## Architecture
 ```
 
 ---
