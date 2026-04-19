@@ -23,6 +23,11 @@ Each call produces **12 dimension scores** — 6 technical + 6 behavioral. Every
 
 ## Commands
 
+No `requirements.txt` is checked in yet — install manually:
+```bash
+pip install openai supabase pydantic python-dotenv pytest ruff
+```
+
 ```bash
 # 1. INGEST (Staging area: data/unprocessed_calls)
 python3 etl.py --source "data/unprocessed_calls"
@@ -47,11 +52,7 @@ python3 -m src.orchestrator --unprocessed --track behavioral --source supabase
 pytest tests/ -v
 ruff check src/ tests/
 ```
-
----
-
-## Architecture
-```
+Tests `pytest.skip()` if `calls.db` is missing, so a fresh clone with no DB is a no-op pass. No `ruff.toml` / `pyproject.toml` is checked in; ruff runs against its defaults.
 
 ---
 
@@ -113,7 +114,7 @@ calls.db / Supabase  →  context_builder  →  compute_latency  →  classify_c
 
 `issues.evidence` is `JSONB NOT NULL`; `Issue.evidence` is `str` in Pydantic (OpenAI strict mode disallows open dicts). The writer wraps as `{"text": <evidence>}` at insert time.
 
-DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_indexes.sql](sql/002_indexes.sql)); the two-track extension is in [sql/003_behavioral_columns.sql](sql/003_behavioral_columns.sql); the technical-column prefix rename is in [sql/004_rename_technical_columns.sql](sql/004_rename_technical_columns.sql); remediation schema in [sql/005_remediation_schema.sql](sql/005_remediation_schema.sql).
+DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_indexes.sql](sql/002_indexes.sql)); the two-track extension is in [sql/003_behavioral_columns.sql](sql/003_behavioral_columns.sql); the technical-column prefix rename is in [sql/004_rename_technical_columns.sql](sql/004_rename_technical_columns.sql); remediation schema in [sql/005_remediation_schema.sql](sql/005_remediation_schema.sql); recording URL column in [sql/006_add_recording_url.sql](sql/006_add_recording_url.sql).
 
 ---
 
@@ -122,7 +123,7 @@ DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_index
 | File | Purpose |
 |---|---|
 | `ARCHITECTURE.md` | Full design spec, Postgres schema, phase breakdown — read first |
-| `etl.py` | Parses 76 call JSONs → `calls.db` |
+| `etl.py` | Parses call JSONs → `calls.db` |
 | `calls.db` | SQLite source (authoritative ingest path) |
 | `sql/001_schema.sql` | Full Postgres DDL for all 11 Supabase tables |
 | `sql/003_behavioral_columns.sql` | `bucket` column + behavioral overall columns migration |
@@ -144,9 +145,12 @@ DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_index
 | `src/batch_processor.py` | Computes aggregate stats + calls gap analyzer |
 | `src/run_remediation_analysis.py` | CLI to run deep insights on batch gaps |
 | `src/remediation_schemas.py` | Models for root cause and remediation |
+| `src/migrate_sqlite_to_supabase.py`, `src/supabase_client.py`, `src/upload_transcripts.py` | One-off migration & ingest utilities (SQLite→Supabase backfill, thin Supabase client wrapper, per-call transcript uploader). Not part of the steady-state scoring pipeline. |
 | `prompts/judge_gap_analysis.md` | "Performance Analyst" prompt for batch patterns |
 | `prompts/judge_remediation.md` | "Senior Architect" prompt for root cause analysis |
 | `tests/fixtures/expected_019d6a86.json` | Golden regression fixture |
+
+**Top-level directories not listed above:** `scratch/` — operational one-off scripts (audit, overlap checks, reorg, migration runners); `individual_calls/` — per-call ingest staging; `outputs/` — local JSON artifacts; `Eval Spec Sales IB/` — source eval specs & prompt drafts that informed judge design.
 
 ---
 
@@ -168,7 +172,7 @@ In SQLite, `tool_calls` and `tool_results` are separate rows matched by `tool_ca
 
 ## Environment
 
-Secrets in `.env` (gitignored). See `.env.example` for required keys: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`.
+Secrets in `.env` (gitignored). See `.env.example` for required keys: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_PUBLISHABLE_KEY`.
 
 Models: `gpt-4o-mini` for classifier, `gpt-4o` for all 11 LLM dimension judges, `programmatic` for latency.
 
