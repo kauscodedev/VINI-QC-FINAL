@@ -146,7 +146,7 @@ export function CallDetailDrawer({ call, onClose }: CallDetailDrawerProps) {
     setExpandedReasoning(null);
     setShowTranscript(false);
     fetch(`/api/calls/${call.call_id}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
       .then(setDetail)
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
@@ -162,10 +162,10 @@ export function CallDetailDrawer({ call, onClose }: CallDetailDrawerProps) {
   const overall = detail?.overall;
   const context = detail?.context;
   const classification = detail?.classification;
-  const technicalScores = detail?.dimension_scores.filter((d) => d.bucket === 'technical') ?? [];
-  const behavioralScores = detail?.dimension_scores.filter((d) => d.bucket === 'behavioral') ?? [];
-  const criticalIssues = detail?.issues.filter((i) => i.severity === 'critical') ?? [];
-  const warningIssues = detail?.issues.filter((i) => i.severity === 'warning') ?? [];
+  const technicalScores = detail?.dimension_scores?.filter((d) => d.bucket === 'technical') ?? [];
+  const behavioralScores = detail?.dimension_scores?.filter((d) => d.bucket === 'behavioral') ?? [];
+  const criticalIssues = detail?.issues?.filter((i) => i.severity === 'critical') ?? [];
+  const warningIssues = detail?.issues?.filter((i) => i.severity === 'warning') ?? [];
 
   return (
     <>
