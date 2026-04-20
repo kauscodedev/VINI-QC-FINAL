@@ -52,7 +52,7 @@ interface CallDetail {
     customer_email?: string;
     customer_city?: string;
     customer_state?: string;
-    interested_vehicle?: string;
+    interested_vehicle?: any;
     formatted_transcript?: string;
   } | null;
   classification: {
@@ -237,8 +237,22 @@ export function CallDetailDrawer({ call, onClose }: CallDetailDrawerProps) {
                   <div className="flex items-center gap-1.5 text-slate-300"><MapPin className="w-3 h-3 text-slate-500" />{[context.customer_city, context.customer_state].filter(Boolean).join(', ')}</div>
                 )}
                 {context.interested_vehicle && (
-                  <div className="flex items-center gap-1.5 text-slate-300 col-span-2"><Car className="w-3 h-3 text-slate-500" />{context.interested_vehicle}</div>
-                )}
+  <div className="flex items-center gap-1.5 text-slate-300 col-span-2">
+    <Car className="w-3 h-3 text-slate-500" />
+    {typeof context.interested_vehicle === 'object' ? (
+      <span>
+        {context.interested_vehicle.year} {context.interested_vehicle.make} {context.interested_vehicle.model}
+        {context.interested_vehicle.vin && (
+          <span className="text-[10px] text-slate-500 ml-1 font-mono uppercase">
+            ({context.interested_vehicle.vin})
+          </span>
+        )}
+      </span>
+    ) : (
+      context.interested_vehicle
+    )}
+  </div>
+)}
               </div>
             </div>
           )}
