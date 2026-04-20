@@ -52,7 +52,7 @@ python3 -m src.orchestrator --unprocessed --track behavioral --source supabase
 pytest tests/ -v
 ruff check src/ tests/
 ```
-Tests `pytest.skip()` if `calls.db` is missing, so a fresh clone with no DB is a no-op pass. No `ruff.toml` / `pyproject.toml` is checked in; ruff runs against its defaults.
+The only test file is [tests/test_context_builder.py](tests/test_context_builder.py); it `pytest.skip()`s if `calls.db` is missing, so a fresh clone with no DB is a no-op pass. The golden fixture [tests/fixtures/expected_019d6a86.json](tests/fixtures/expected_019d6a86.json) is the regression target. No `ruff.toml` / `pyproject.toml` is checked in; ruff runs against its defaults.
 
 ---
 
@@ -87,7 +87,7 @@ calls.db / Supabase  →  context_builder  →  compute_latency  →  classify_c
 
 **Formatters** (`src/formatters.py`): `format_context_for_judge(ctx, include_full_tool_events, call_type)` builds the user-message payload for any judge. Call `drop_raw_prompt(ctx)` before passing context — the raw system prompt XML is 5–10K tokens and already parsed into `system_context`.
 
-**Judges** (`src/judges/`): 11 LLM judges + classify + programmatic latency. All LLM judges use `AsyncOpenAI.beta.chat.completions.parse()` with Pydantic `response_format` (strict structured outputs), `temperature=0`. Prompts live in `prompts/<name>.md`. Shared helpers in `src/judges/_base.py`. `classify.py` is sync (wrapped via `asyncio.to_thread`). `latency_score.py` is programmatic — produces a `DimensionScore` so the aggregator consumes all dimensions uniformly. (The `.claude/agents/` folder is strictly reserved for optional Claude Code build-time subagents.)
+**Judges** (`src/judges/`): 11 LLM judges + classify + programmatic latency. All LLM judges use `AsyncOpenAI.beta.chat.completions.parse()` with Pydantic `response_format` (strict structured outputs), `temperature=0`. Prompts live in `prompts/<name>.md`. Shared helpers in `src/judges/_base.py`. `classify.py` is sync (wrapped via `asyncio.to_thread`). `latency_score.py` is programmatic — produces a `DimensionScore` so the aggregator consumes all dimensions uniformly. (The `.claude/agents/` folder is strictly reserved for optional Claude Code build-time subagents. One such subagent exists today: [.claude/agents/call-classifier.md](.claude/agents/call-classifier.md), a CLI wrapper around the classification judge with example Supabase queries.)
 
 **Latency** (`src/latency.py`): `bot_latency = bot.time_ms - prev_user.end_time_ms`. Flags > 6 s latency, > 12 s dead air. Returns `{"format": "legacy"}` sentinel when timestamps absent → `score_latency` returns `score_na=True`.
 
@@ -115,6 +115,42 @@ calls.db / Supabase  →  context_builder  →  compute_latency  →  classify_c
 `issues.evidence` is `JSONB NOT NULL`; `Issue.evidence` is `str` in Pydantic (OpenAI strict mode disallows open dicts). The writer wraps as `{"text": <evidence>}` at insert time.
 
 DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_indexes.sql](sql/002_indexes.sql)); the two-track extension is in [sql/003_behavioral_columns.sql](sql/003_behavioral_columns.sql); the technical-column prefix rename is in [sql/004_rename_technical_columns.sql](sql/004_rename_technical_columns.sql); remediation schema in [sql/005_remediation_schema.sql](sql/005_remediation_schema.sql); recording URL column in [sql/006_add_recording_url.sql](sql/006_add_recording_url.sql).
+
+---
+
+## Dashboard ([dashboard/](dashboard/))
+
+Next.js 14 (App Router, TypeScript) leadership dashboard that visualizes the Supabase tables produced by the pipeline. **Independent of the Python project** — its own `package.json`, `.env.local`, and deploy lifecycle (Vercel-ready, with `dashboard/` as the project root).
+
+### Commands (run from `dashboard/`)
+```bash
+npm install
+npm run dev      # local dev server (http://localhost:3000)
+npm run build    # production build
+npm run start    # serve the production build
+npm run lint     # next lint
+```
+
+### Environment
+`dashboard/.env.local` (separate from root `.env`):
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` — service role key, used **server-side only** in [app/api/dashboard/route.ts](dashboard/app/api/dashboard/route.ts). Never exposed to the browser.
+
+### Architecture
+- [app/page.tsx](dashboard/app/page.tsx) is a thin entry that mounts [app/dashboard.tsx](dashboard/app/dashboard.tsx) (the main client component).
+- All Supabase reads go through the server route [app/api/dashboard/route.ts](dashboard/app/api/dashboard/route.ts) — the dashboard component fetches a single JSON payload from `/api/dashboard` rather than querying Supabase from the client.
+- Components in [app/components/](dashboard/app/components/) each render one slice of the pipeline output:
+  - `SummaryCards` — overall pass/review/fail counts
+  - `TrackComparison` — technical vs behavioral overall scores (from `call_overall_scores`)
+  - `DimensionPerformance` — per-dimension averages (from `dimension_scores`, filtered by `bucket`)
+  - `IssueHeatmap` — `issues` table aggregated by dimension × severity
+  - `CapabilityGaps` — `capability_gaps` rows from the most recent batch
+  - `RemediationInsights` — `remediation_insights` rows (root-cause analysis)
+  - `CallsTable` — paginated call list with drill-in
+- UI stack: Tremor + Recharts for charts, Radix UI primitives, Tailwind CSS.
+
+### Schema coupling
+The dashboard reads the Supabase tables documented in *Output tables* above. When changing column names or `bucket` semantics in `sql/00*.sql`, also update the matching `select` in [app/api/dashboard/route.ts](dashboard/app/api/dashboard/route.ts) and the consuming component — the recent `17c6b9f` and `25e10ec` commits exist because schema drift broke the build.
 
 ---
 
@@ -149,6 +185,7 @@ DDL lives in [sql/001_schema.sql](sql/001_schema.sql) (indexes in [sql/002_index
 | `prompts/judge_gap_analysis.md` | "Performance Analyst" prompt for batch patterns |
 | `prompts/judge_remediation.md` | "Senior Architect" prompt for root cause analysis |
 | `tests/fixtures/expected_019d6a86.json` | Golden regression fixture |
+| `dashboard/` | Next.js 14 leadership dashboard — see *Dashboard* section above |
 
 **Top-level directories not listed above:** `scratch/` — operational one-off scripts (audit, overlap checks, reorg, migration runners); `individual_calls/` — per-call ingest staging; `outputs/` — local JSON artifacts; `Eval Spec Sales IB/` — source eval specs & prompt drafts that informed judge design.
 
@@ -184,3 +221,4 @@ Models: `gpt-4o-mini` for classifier, `gpt-4o` for all 11 LLM dimension judges, 
 - OpenAI strict structured outputs requires `additionalProperties: false` on every nested object. This is why `Issue.evidence` is `str` (not `Dict[str, Any]`). Don't reintroduce open dicts in any Pydantic model used as a `response_format`.
 - `classify.py` uses a sync `OpenAI` client (wrapped via `asyncio.to_thread` in the orchestrator). The 11 dimension judges are natively async.
 - `write_behavioral_only` uses `UPDATE` (not upsert) on `call_overall_scores` because a PostgREST upsert would INSERT NULLs into the NOT-NULL technical columns on conflict. The behavioral-only path therefore **requires** the technical row to already exist (enforced by `_fetch_existing_call_type`).
+- The dashboard reads `SUPABASE_SERVICE_ROLE_KEY` from `dashboard/.env.local`, **not** the root `.env`'s `SUPABASE_KEY`. They're the same secret in practice but stored in two places — keep them in sync when rotating.

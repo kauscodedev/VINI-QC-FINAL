@@ -1,7 +1,7 @@
 'use client';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Activity } from 'lucide-react';
+import { Target, MessageSquare } from 'lucide-react';
 
 interface DimensionPerformanceProps {
   dimensionAverages: {
@@ -10,84 +10,117 @@ interface DimensionPerformanceProps {
   };
 }
 
-export function DimensionPerformance({ dimensionAverages }: DimensionPerformanceProps) {
-  const formatData = (data: Record<string, number>, bucket: string) =>
-    Object.entries(data).map(([name, score]) => ({
-      name: name.replace('behavior_', '').replace(/_/g, ' '),
-      score: Number(score.toFixed(2)),
-      bucket,
-    }));
+function barFill(score: number) {
+  if (score >= 2.5) return '#10b981';
+  if (score >= 1.7) return '#f59e0b';
+  return '#ef4444';
+}
 
-  const technicalData = formatData(dimensionAverages.technical, 'technical');
-  const behavioralData = formatData(dimensionAverages.behavioral, 'behavioral');
-  const allData = [...technicalData, ...behavioralData].sort((a, b) => b.score - a.score);
+function cleanName(name: string) {
+  return name.replace(/^behavior_/, '').replace(/_/g, ' ');
+}
+
+function TrackChart({
+  title,
+  data,
+  Icon,
+  accentClass,
+}: {
+  title: string;
+  data: { name: string; score: number }[];
+  Icon: React.ElementType;
+  accentClass: string;
+}) {
+  const sorted = [...data].sort((a, b) => b.score - a.score);
+  const height = Math.max(240, sorted.length * 44);
 
   return (
-    <div className="mt-8 stat-card">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="rounded-xl p-2 bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400">
-          <Activity className="w-5 h-5" />
+    <div className="stat-card flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <div className={`rounded-xl p-2 ${accentClass}`}>
+          <Icon className="w-4 h-4" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white uppercase tracking-tight">
-            Dimension Performance
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Average scores across all evaluation categories (Scale 1-3)
-          </p>
+          <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h2>
+          <p className="text-[10px] text-slate-400 font-medium">Average score · Scale 1–3</p>
         </div>
       </div>
 
-      <div className="h-[400px] w-full">
+      <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={allData} layout="vertical" margin={{ left: 20, right: 30 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-            <XAxis type="number" domain={[0, 3]} ticks={[0, 1, 2, 3]} />
-            <YAxis 
-              dataKey="name" 
-              type="category" 
-              width={150} 
-              tick={{ fontSize: 12, fill: 'currentColor' }}
-              className="text-slate-600 dark:text-slate-400 font-medium"
+          <BarChart data={sorted} layout="vertical" margin={{ left: 8, right: 36, top: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.4} />
+            <XAxis
+              type="number"
+              domain={[0, 3]}
+              ticks={[0, 1, 1.7, 2.5, 3]}
+              tick={{ fontSize: 10, fill: '#94a3b8' }}
+              tickLine={false}
+            />
+            <YAxis
+              dataKey="name"
+              type="category"
+              width={120}
+              tick={{ fontSize: 11, fill: 'currentColor' }}
+              tickFormatter={cleanName}
+              tickLine={false}
+              axisLine={false}
+              className="text-slate-600 dark:text-slate-400 capitalize"
             />
             <Tooltip
-              cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }}
+              cursor={{ fill: 'rgba(99,102,241,0.05)' }}
               content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  const data = payload[0].payload;
+                if (active && payload?.length) {
+                  const d = payload[0].payload;
                   return (
-                    <div className="glass-card p-3 rounded-xl shadow-xl border-slate-200 dark:border-slate-700">
-                      <p className="text-xs font-bold uppercase text-slate-400 mb-1">{data.bucket}</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white mb-1 uppercase">{data.name}</p>
-                      <p className="text-xl font-black text-brand-600 dark:text-brand-400">{data.score}</p>
+                    <div className="glass-card px-3 py-2 rounded-xl shadow-xl text-sm">
+                      <p className="text-xs font-bold text-slate-400 uppercase mb-1">{cleanName(d.name)}</p>
+                      <p className="text-xl font-black" style={{ color: barFill(d.score) }}>{d.score}</p>
                     </div>
                   );
                 }
                 return null;
               }}
             />
-            <Bar dataKey="score" radius={[0, 10, 10, 0]} barSize={24}>
-              {allData.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={entry.bucket === 'technical' ? '#6366f1' : '#a855f7'} 
-                />
+            <Bar dataKey="score" radius={[0, 8, 8, 0]} barSize={22} label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: '#64748b', formatter: (v: number) => v.toFixed(2) }}>
+              {sorted.map((entry, i) => (
+                <Cell key={i} fill={barFill(entry.score)} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-      
-      <div className="mt-4 flex justify-center gap-6">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-brand-500" />
-          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Technical Track</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-purple-500" />
-          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Behavioral Track</span>
-        </div>
+
+      <div className="flex items-center gap-4 pt-1">
+        {[{ label: '≥ 2.5 Pass', color: '#10b981' }, { label: '1.7–2.5 Review', color: '#f59e0b' }, { label: '< 1.7 Fail', color: '#ef4444' }].map((t) => (
+          <div key={t.label} className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{t.label}</span>
+          </div>
+        ))}
       </div>
+    </div>
+  );
+}
+
+export function DimensionPerformance({ dimensionAverages }: DimensionPerformanceProps) {
+  const toChartData = (map: Record<string, number>) =>
+    Object.entries(map).map(([name, score]) => ({ name, score: Number(score.toFixed(2)) }));
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <TrackChart
+        title="Technical Performance"
+        data={toChartData(dimensionAverages.technical)}
+        Icon={Target}
+        accentClass="bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400"
+      />
+      <TrackChart
+        title="Behavioral Performance"
+        data={toChartData(dimensionAverages.behavioral)}
+        Icon={MessageSquare}
+        accentClass="bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+      />
     </div>
   );
 }

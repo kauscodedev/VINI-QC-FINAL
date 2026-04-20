@@ -12,7 +12,7 @@ const config: Config = {
         background: "var(--background)",
         foreground: "var(--foreground)",
         brand: {
-          50:  "#f0f4ff",
+          50: "#f0f4ff",
           100: "#e0e7ff",
           200: "#c7d2fe",
           300: "#a5b4fc",
@@ -26,8 +26,8 @@ const config: Config = {
         },
       },
       boxShadow: {
-        'premium': '0 10px 30px -10px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05)',
-        'glass': 'inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+        premium: '0 10px 30px -10px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05)',
+        glass: 'inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
       },
       borderRadius: {
         '2xl': '1rem',

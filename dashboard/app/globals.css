@@ -27,7 +27,7 @@ body {
   .glass-card {
     @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 shadow-premium;
   }
-  
+
   .premium-gradient-text {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-brand-400 dark:from-brand-400 dark:to-brand-200;
   }
@@ -45,9 +45,23 @@ body {
 
 .dark .recharts-cartesian-grid-horizontal line,
 .dark .recharts-cartesian-grid-vertical line {
-  stroke: #1e293b;
+  stroke: #334155;
 }
 
+/* Outcome badge utilities (used by remote components) */
+.badge { display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px; padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 700; }
+.badge-pass { background: #dcfce7; color: #166534; }
+.badge-pass-issues { background: #fef3c7; color: #92400e; }
+.badge-review { background: #ffedd5; color: #c2410c; }
+.badge-fail { background: #fee2e2; color: #991b1b; }
+.badge-unknown { background: #e2e8f0; color: #475569; }
+
 .recharts-default-tooltip {
-  @apply !bg-white/90 dark:!bg-slate-900/90 !border-slate-200 dark:!border-slate-700 !rounded-xl !shadow-lg !backdrop-blur-sm !px-4 !py-3 !text-sm;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1) !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.875rem !important;
+  backdrop-filter: blur(8px) !important;
 }
