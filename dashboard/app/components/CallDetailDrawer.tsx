@@ -108,14 +108,15 @@ function formatDuration(ms: number | null | undefined) {
   return `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
-function cleanDim(name: string) {
+function cleanDim(name: string | null | undefined) {
+  if (!name) return '';
   return name.replace(/^behavior_/, '').replace(/_/g, ' ');
 }
 
 function evidenceText(evidence: IssueItem['evidence']): string | null {
   if (!evidence) return null;
   if (typeof evidence === 'string') return evidence;
-  if (typeof evidence === 'object' && evidence.text) return evidence.text;
+  if (typeof evidence === 'object' && evidence.text) return String(evidence.text);
   return null;
 }
 
@@ -128,7 +129,7 @@ function ScoreBar({ score }: { score: number | null }) {
       <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
-      <span className="text-xs font-black w-8 text-right" style={{ color }}>{score.toFixed(2)}</span>
+      <span className="text-xs font-black w-8 text-right" style={{ color }}>{Number(score).toFixed(2)}</span>
     </div>
   );
 }
@@ -336,7 +337,7 @@ export function CallDetailDrawer({ call, onClose }: CallDetailDrawerProps) {
                             <span className="text-[10px] text-slate-400 font-mono capitalize">{cleanDim(issue.dimension)}</span>
                             {issue.turn_number != null && <span className="text-[9px] text-slate-600">Turn {issue.turn_number}</span>}
                           </div>
-                          <p className="text-xs font-semibold text-slate-200 mt-0.5 capitalize">{issue.issue_type.replace(/_/g, ' ')}</p>
+                          <p className="text-xs font-semibold text-slate-200 mt-0.5 capitalize">{(issue.issue_type ?? '').replace(/_/g, ' ')}</p>
                           {ev && <p className="text-[11px] text-slate-400 mt-1 leading-relaxed italic">"{ev}"</p>}
                         </div>
                       </div>
